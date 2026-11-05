@@ -1062,8 +1062,20 @@ def test_auto_cat_features():
     assert auto_pool.get_cat_feature_indices() == [1, 2]
     assert _have_equal_features(auto_pool, Pool(df, labels, cat_features=[1, 2]))
 
+    model = CatBoostClassifier(iterations=2)
+    model.fit(df, labels, cat_features='auto')
+    assert model.get_cat_feature_indices() == [1, 2]
+
     model = CatBoostClassifier(iterations=2, cat_features='auto')
     model.fit(df, labels)
+    assert model.get_cat_feature_indices() == [1, 2]
+
+    reordered_df = df.select(['cat_feat_2', 'num_feat_0', 'cat_feat_1'])
+    model.fit(reordered_df, labels)
+    assert model.get_cat_feature_indices() == [0, 2]
+    assert model.get_params()['cat_features'] == 'auto'
+
+    model.fit(auto_pool)
     assert model.get_cat_feature_indices() == [1, 2]
 
     assert Pool(df.select('num_feat_0'), labels, cat_features='auto').get_cat_feature_indices() == []

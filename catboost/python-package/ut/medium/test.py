@@ -911,6 +911,11 @@ def test_auto_cat_features():
         model.fit(X=df, y=labels)
         assert model.get_cat_feature_indices() == [2, 3]
 
+    model = CatBoostClassifier(iterations=2, cat_features='auto')
+    model.fit(explicit_pool)
+    assert model.get_cat_feature_indices() == [2, 3]
+    assert model.get_params()['cat_features'] == 'auto'
+
     model = CatBoostClassifier(iterations=2)
     model.fit(X=df, y=labels, cat_features='auto')
     assert model.get_cat_feature_indices() == [2, 3]

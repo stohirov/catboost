@@ -344,6 +344,20 @@ def _get_features_indices(features, feature_names):
     return features
 
 
+def _is_polars_categorical_dtype(dtype):
+    """Return whether a Polars dtype is categorical, across Polars versions."""
+    categorical_base_types = {pl.Categorical}
+    enum_type = getattr(pl, 'Enum', None)
+    if enum_type is not None:
+        categorical_base_types.add(enum_type)
+
+    # DataFrame.dtypes normally contains dtype instances. Using base_type keeps
+    # this check independent of dtype parameters and Polars' class/instance
+    # equality behavior.
+    base_type = dtype.base_type() if hasattr(dtype, 'base_type') else dtype
+    return base_type in categorical_base_types
+
+
 def _is_auto_features(features):
     return isinstance(features, STRING_TYPES) and features == 'auto'
 
@@ -387,7 +401,7 @@ def _resolve_auto_features(features, data, param_name):
         return [
             feature_idx
             for feature_idx, dtype in enumerate(data.dtypes)
-            if (dtype == pl.Categorical) or isinstance(dtype, pl.Enum)
+            if _is_polars_categorical_dtype(dtype)
         ]
     raise CatBoostError(
         "cat_features='auto' requires the dataset to be a pandas.DataFrame or polars.DataFrame, but got {}. "
@@ -5360,6 +5374,8 @@ class CatBoostClassifier(CatBoost):
         If 'auto', Categ features are detected as the categorical columns of the training dataset,
         which must be a pandas.DataFrame or polars.DataFrame in this case. Detection is performed on every 'fit' call,
         so the parameter is preserved as 'auto' by 'get_params' and can be used in sklearn pipelines.
+        If the training dataset is already a Pool, its categorical feature metadata is used as the
+        resolution of 'auto'.
 
     text_features : list or numpy.ndarray, [default=None]
         If not None, giving the list of Text features indices or names (names are represented as strings).
@@ -7470,7 +7486,7 @@ def cv(pool=None, params=None, dtrain=None, iterations=None, num_boost_round=Non
         del params['cat_features']
 
     if 'text_features' in params:
-        _resolve_auto_features(params['text_features'], pool, 'text_features')
+        params['text_features'] = _resolve_auto_features(params['text_features'], pool, 'text_features')
         text_feature_indices_from_params = _get_features_indices(params['text_features'], pool.get_feature_names())
         if set(pool.get_text_feature_indices()) != set(text_feature_indices_from_params):
             raise CatBoostError("text features indices in params are different from ones in the dataset "
@@ -7479,7 +7495,7 @@ def cv(pool=None, params=None, dtrain=None, iterations=None, num_boost_round=Non
         del params['text_features']
 
     if 'embedding_features' in params:
-        _resolve_auto_features(params['embedding_features'], pool, 'embedding_features')
+        params['embedding_features'] = _resolve_auto_features(params['embedding_features'], pool, 'embedding_features')
         embedding_feature_indices_from_params = _get_features_indices(params['embedding_features'], pool.get_feature_names())
         if set(pool.get_embedding_feature_indices()) != set(embedding_feature_indices_from_params):
             raise CatBoostError("embedding features indices in params are different from ones in the dataset "
